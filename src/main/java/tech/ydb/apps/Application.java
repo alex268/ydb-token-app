@@ -25,12 +25,14 @@ public class Application implements CommandLineRunner {
     private static final Logger logger = LoggerFactory.getLogger(Application.class);
 
     private static final int THREADS_COUNT = 4;
-    private static final int RECORDS_COUNT = 100_000;
+    private static final int RECORDS_COUNT = 500_000;
     private static final int LOAD_BATCH_SIZE = 1000;
 
     public static void main(String[] args) {
         SpringApplication.run(Application.class, args).close();
     }
+
+    private final Ticker ticker = new Ticker(logger);
 
     private final SchemeService schemeService;
     private final TokenService tokenService;
@@ -48,6 +50,8 @@ public class Application implements CommandLineRunner {
     @Override
     public void run(String... args) throws Exception {
         logger.info("CLI app has started");
+        ticker.start();
+
         for (String arg : args) {
             logger.info("execute {} step", arg);
 
@@ -69,6 +73,9 @@ public class Application implements CommandLineRunner {
         executor.shutdown();
         executor.awaitTermination(5, TimeUnit.MINUTES);
 
+        ticker.stop();
+        ticker.printTotal();
+
         logger.info("CLI app has finished");
     }
 
@@ -84,9 +91,10 @@ public class Application implements CommandLineRunner {
             final int last = id < RECORDS_COUNT ? id : RECORDS_COUNT;
 
             executor.submit(() -> {
-                logger.info("load batch {} - {}", first, last);
-                tokenService.insertBatch(first, last);
-                logger.info("load batch {} - {} OK", first, last);
+                try (Ticker.Measure measure = ticker.getLoad().newCall()) {
+                    tokenService.insertBatch(first, last);
+                    measure.inc(last - first);
+                }
             });
         }
     }
