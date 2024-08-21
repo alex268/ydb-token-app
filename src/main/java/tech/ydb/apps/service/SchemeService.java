@@ -12,7 +12,7 @@ import com.google.common.io.Files;
 import org.hibernate.Session;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.ResourceUtils;
 
@@ -22,7 +22,7 @@ import tech.ydb.apps.annotation.YdbRetryable;
  *
  * @author Aleksandr Gorshenin
  */
-@Component
+@Service
 public class SchemeService {
     private static final Logger logger = LoggerFactory.getLogger(SchemeService.class);
 

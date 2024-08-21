@@ -34,4 +34,18 @@ public class Token {
     public Integer getVersion() {
         return this.version;
     }
+
+    public Token() { }
+
+    public Token(String username, int version) {
+        // UUID based on MD5 hash
+        this.id = UUID.nameUUIDFromBytes((username + "_v" + version).getBytes());
+        this.username = username;
+        this.version = version;
+    }
+
+    @Override
+    public String toString() {
+        return "Token{id=" + id.toString() + ", username='" + username + "', version=" + version + "}";
+    }
 }
