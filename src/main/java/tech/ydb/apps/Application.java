@@ -9,6 +9,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import javax.annotation.PreDestroy;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
@@ -29,7 +31,7 @@ public class Application implements CommandLineRunner {
     private static final Logger logger = LoggerFactory.getLogger(Application.class);
 
     private static final int THREADS_COUNT = 64;
-    private static final int RECORDS_COUNT = 500_000;
+    private static final int RECORDS_COUNT = 1_000_000;
     private static final int LOAD_BATCH_SIZE = 1000;
 
     private static final int WORKLOAD_DURATION_SECS = 60;
@@ -53,8 +55,20 @@ public class Application implements CommandLineRunner {
         this.executor = Executors.newFixedThreadPool(THREADS_COUNT, this::threadFactory);
     }
 
+    @PreDestroy
+    public void close() throws Exception {
+        logger.info("CLI app is waiting for finishing");
+
+        executor.shutdown();
+        executor.awaitTermination(5, TimeUnit.MINUTES);
+
+        ticker.printTotal();
+        ticker.close();
+        logger.info("CLI app has finished");
+    }
+
     @Override
-    public void run(String... args) throws Exception {
+    public void run(String... args) {
         logger.info("CLI app has started");
 
         for (String arg : args) {
@@ -76,15 +90,6 @@ public class Application implements CommandLineRunner {
                 ticker.runWithMonitor(this::runWorkloads);
             }
         }
-
-        logger.info("CLI app is waiting for finishing");
-
-        executor.shutdown();
-        executor.awaitTermination(5, TimeUnit.MINUTES);
-
-        ticker.printTotal();
-        ticker.close();
-        logger.info("CLI app has finished");
     }
 
     private Thread threadFactory(Runnable runnable) {

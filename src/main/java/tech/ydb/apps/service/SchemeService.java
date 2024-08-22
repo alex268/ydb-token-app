@@ -1,20 +1,22 @@
 package tech.ydb.apps.service;
 
-import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
 import java.sql.Statement;
 
 import javax.persistence.EntityManager;
 
-import com.google.common.io.Files;
+import com.google.common.io.CharStreams;
 import org.hibernate.Session;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.ResourceUtils;
 
 import tech.ydb.apps.annotation.YdbRetryable;
 
@@ -27,15 +29,17 @@ public class SchemeService {
     private static final Logger logger = LoggerFactory.getLogger(SchemeService.class);
 
     private final EntityManager em;
+    private final ResourceLoader rl;
 
-    public SchemeService(EntityManager em) {
+    public SchemeService(EntityManager em, ResourceLoader rl) {
         this.em = em;
+        this.rl = rl;
     }
 
     @Transactional
     @YdbRetryable
     public void executeClean() {
-        String script = getDropSqlScript();
+        String script = readResourceFile("sql/drop.sql");
         if (script == null) {
             logger.warn("cannot find drop sql in classpath");
             return;
@@ -56,7 +60,7 @@ public class SchemeService {
     @Transactional
     @YdbRetryable
     public void executeInit() {
-        String script = getInitSqlScript();
+        String script = readResourceFile("sql/init.sql");
         if (script == null) {
             logger.warn("cannot find init sql in classpath");
             return;
@@ -72,19 +76,10 @@ public class SchemeService {
         });
     }
 
-    private String getDropSqlScript() {
-        try {
-            File file = ResourceUtils.getFile("classpath:sql/drop.sql");
-            return Files.asCharSource(file, StandardCharsets.UTF_8).read();
-        } catch (IOException e) {
-            return null;
-        }
-    }
-
-    private String getInitSqlScript() {
-        try {
-            File file = ResourceUtils.getFile("classpath:sql/init.sql");
-            return Files.asCharSource(file, StandardCharsets.UTF_8).read();
+    private String readResourceFile(String location) {
+        Resource resource = rl.getResource("classpath:" + location);
+        try (InputStream is = resource.getInputStream()) {
+            return CharStreams.toString(new InputStreamReader(is, StandardCharsets.UTF_8));
         } catch (IOException e) {
             return null;
         }
