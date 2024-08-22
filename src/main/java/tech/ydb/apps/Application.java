@@ -1,5 +1,9 @@
 package tech.ydb.apps;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -24,9 +28,11 @@ import tech.ydb.apps.service.TokenService;
 public class Application implements CommandLineRunner {
     private static final Logger logger = LoggerFactory.getLogger(Application.class);
 
-    private static final int THREADS_COUNT = 4;
+    private static final int THREADS_COUNT = 64;
     private static final int RECORDS_COUNT = 500_000;
     private static final int LOAD_BATCH_SIZE = 1000;
+
+    private static final int WORKLOAD_DURATION_SECS = 60;
 
     public static void main(String[] args) {
         SpringApplication.run(Application.class, args).close();
@@ -50,7 +56,6 @@ public class Application implements CommandLineRunner {
     @Override
     public void run(String... args) throws Exception {
         logger.info("CLI app has started");
-        ticker.start();
 
         for (String arg : args) {
             logger.info("execute {} step", arg);
@@ -64,7 +69,11 @@ public class Application implements CommandLineRunner {
             }
 
             if ("load".equalsIgnoreCase(arg)) {
-                loadData();
+                ticker.runWithMonitor(this::loadData);
+            }
+
+            if ("run".equalsIgnoreCase(arg)) {
+                ticker.runWithMonitor(this::runWorkloads);
             }
         }
 
@@ -73,9 +82,8 @@ public class Application implements CommandLineRunner {
         executor.shutdown();
         executor.awaitTermination(5, TimeUnit.MINUTES);
 
-        ticker.stop();
         ticker.printTotal();
-
+        ticker.close();
         logger.info("CLI app has finished");
     }
 
@@ -84,18 +92,51 @@ public class Application implements CommandLineRunner {
     }
 
     private void loadData() {
+        List<CompletableFuture<?>> futures = new ArrayList<>();
         int id = 0;
         while (id < RECORDS_COUNT) {
             final int first = id;
             id += LOAD_BATCH_SIZE;
             final int last = id < RECORDS_COUNT ? id : RECORDS_COUNT;
 
-            executor.submit(() -> {
+            futures.add(CompletableFuture.runAsync(() -> {
                 try (Ticker.Measure measure = ticker.getLoad().newCall()) {
                     tokenService.insertBatch(first, last);
-                    measure.inc(last - first);
+                    measure.inc();
                 }
-            });
+            }, executor));
+        }
+
+        CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).join();
+    }
+
+    private void runWorkloads() {
+        long finishAt = System.currentTimeMillis() + WORKLOAD_DURATION_SECS * 1000;
+        List<CompletableFuture<?>> futures = new ArrayList<>();
+        for (int i = 0; i < THREADS_COUNT; i++) {
+            futures.add(CompletableFuture.runAsync(() -> this.workload(finishAt), executor));
+        }
+
+        CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).join();
+    }
+
+    private void workload(long finishAt) {
+        final Random rnd = new Random();
+        while (System.currentTimeMillis() < finishAt) {
+            int mode = rnd.nextInt(10);
+            int id = rnd.nextInt(RECORDS_COUNT);
+
+            if (mode < 5) {
+                try (Ticker.Measure measure = ticker.getFetch().newCall()) {
+                    tokenService.fetchToken(id);
+                    measure.inc();
+                }
+            } else {
+                try (Ticker.Measure measure = ticker.getUpdate().newCall()) {
+                    tokenService.updateToken(id);
+                    measure.inc();
+                }
+            }
         }
     }
 }

@@ -3,6 +3,7 @@ package tech.ydb.apps;
 import java.util.Arrays;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.LongAdder;
 
@@ -24,11 +25,7 @@ public class Ticker {
         }
 
         public void inc() {
-            inc(1);
-        }
-
-        public void inc(long value) {
-            count += value;
+            count += 1;
         }
 
         @Override
@@ -66,28 +63,34 @@ public class Ticker {
             return new Measure(this);
         }
 
-        public void print(Logger logger) {
-            if (count.longValue() > 0 && lastPrinted != 0) {
-                long ms = System.currentTimeMillis() - lastPrinted;
-                double rps = 1000 * count.longValue() / ms;
-                logger.info("Op {} executed {} times with RPS {} ops", name, count.longValue(), rps);
-            }
-
+        private void reset() {
             count.reset();
             timeMs.reset();
             lastPrinted = System.currentTimeMillis();
         }
 
-        public void printTotal(Logger logger) {
+        private void print(Logger logger) {
+            if (count.longValue() > 0 && lastPrinted != 0) {
+                long ms = System.currentTimeMillis() - lastPrinted;
+                double rps = 1000 * count.longValue() / ms;
+                logger.info("{}\twas executed {} times\t with RPS {} ops", name, count.longValue(), rps);
+            }
+
+            reset();
+        }
+
+        private void printTotal(Logger logger) {
             if (totalCount.longValue() > 0) {
                 double average = 1.0d  * totalTimeMs.longValue() / totalCount.longValue();
-                logger.info("Op {} executed {} times, with average time {} ms/op", name, totalCount.longValue(), average);
+                logger.info("{}\twas executed {} times,\twith average time {} ms/op", name, totalCount.longValue(), average);
             }
         }
     }
 
     private final Logger logger;
-    private final Method load = new Method("LOAD");
+    private final Method load = new Method("LOAD  ");
+    private final Method fetch = new Method("FETCH ");
+    private final Method update = new Method("UPDATE");
 
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(
             r -> new Thread(r, "ticker")
@@ -101,22 +104,33 @@ public class Ticker {
         return this.load;
     }
 
-    public void start() {
-        scheduler.scheduleAtFixedRate(this::print, 1, 10, TimeUnit.SECONDS);
+    public Method getFetch() {
+        return this.fetch;
     }
 
-    public void stop() throws InterruptedException {
+    public Method getUpdate() {
+        return this.update;
+    }
+
+    public void runWithMonitor(Runnable runnable) {
+        Arrays.asList(load, fetch, update).forEach(Method::reset);
+        final ScheduledFuture<?> future = scheduler.scheduleAtFixedRate(this::print, 1, 10, TimeUnit.SECONDS);
+        runnable.run();
+        future.cancel(false);
+        print();
+    }
+
+    public void close() throws InterruptedException {
         scheduler.shutdownNow();
         scheduler.awaitTermination(20, TimeUnit.SECONDS);
     }
 
     private void print() {
-        logger.info("------------ INFO ----------------");
-        Arrays.asList(load).forEach(m -> m.print(logger));
+        Arrays.asList(load, fetch, update).forEach(m -> m.print(logger));
     }
 
     public void printTotal() {
         logger.info("=========== TOTAL ==============");
-        Arrays.asList(load).forEach(m -> m.printTotal(logger));
+        Arrays.asList(load, fetch, update).forEach(m -> m.printTotal(logger));
     }
 }
