@@ -30,7 +30,7 @@ import tech.ydb.apps.service.TokenService;
 public class Application implements CommandLineRunner {
     private static final Logger logger = LoggerFactory.getLogger(Application.class);
 
-    private static final int THREADS_COUNT = 64;
+    private static final int THREADS_COUNT = 32;
     private static final int RECORDS_COUNT = 1_000_000;
     private static final int LOAD_BATCH_SIZE = 1000;
 

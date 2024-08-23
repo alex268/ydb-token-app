@@ -7,6 +7,8 @@ import javax.persistence.Entity;
 import javax.persistence.Id;
 import javax.persistence.Table;
 
+import org.hibernate.annotations.Type;
+
 /**
  *
  * @author Aleksandr Gorshenin
@@ -15,7 +17,8 @@ import javax.persistence.Table;
 @Table(name = "app_token")
 public class Token {
     @Id
-    private String id;
+    @Type(type="uuid-char")
+    private UUID id;
 
     @Column
     private String username;
@@ -23,7 +26,7 @@ public class Token {
     @Column
     private Integer version;
 
-    public String getId() {
+    public UUID getId() {
         return this.id;
     }
 
@@ -38,14 +41,14 @@ public class Token {
     public Token() { }
 
     public Token(String username, int version) {
-        this.id = getKey(username, version).toString();
+        this.id = getKey(username, version);
         this.username = username;
         this.version = version;
     }
 
     @Override
     public String toString() {
-        return "Token{id=" + id + ", username='" + username + "', version=" + version + "}";
+        return "Token{id=" + id.toString() + ", username='" + username + "', version=" + version + "}";
     }
 
     public static UUID getKey(String username, int version) {

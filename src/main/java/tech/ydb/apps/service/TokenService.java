@@ -37,13 +37,14 @@ public class TokenService {
     public Token fetchToken(int id) {
         String username = "user_" + id;
         for (int version = 1; version < 20; version ++) {
-            Token token = em.find(Token.class, Token.getKey(username, version).toString());
+            Token token = em.find(Token.class, Token.getKey(username, version));
             logger.trace("finded token {}/{} -> {}", username, version, token);
             if (token != null) {
                 return token;
             }
         }
 
+        logger.warn("token {} is not found");
         return null;
     }
 
