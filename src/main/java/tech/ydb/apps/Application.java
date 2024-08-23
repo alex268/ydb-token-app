@@ -1,5 +1,6 @@
 package tech.ydb.apps;
 
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -16,6 +17,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.annotation.Bean;
+import org.springframework.retry.RetryCallback;
+import org.springframework.retry.RetryContext;
+import org.springframework.retry.RetryListener;
 import org.springframework.retry.annotation.EnableRetry;
 
 import tech.ydb.apps.service.SchemeService;
@@ -47,6 +52,8 @@ public class Application implements CommandLineRunner {
 
     private final ExecutorService executor;
     private final AtomicInteger threadCounter = new AtomicInteger(0);
+    private final AtomicInteger executionsCount = new AtomicInteger(0);
+    private final AtomicInteger retriesCount = new AtomicInteger(0);
 
     public Application(SchemeService schemeService, TokenService tokenService) {
         this.schemeService = schemeService;
@@ -64,7 +71,37 @@ public class Application implements CommandLineRunner {
 
         ticker.printTotal();
         ticker.close();
+
+        logger.info("Executed {} transactions with {} retries", executionsCount.get(), retriesCount.get());
         logger.info("CLI app has finished");
+    }
+
+    @Bean
+    public RetryListener retryListener() {
+        return new RetryListener() {
+            @Override
+            public <T, E extends Throwable> boolean open(RetryContext ctx, RetryCallback<T, E> callback) {
+                executionsCount.incrementAndGet();
+                return true;
+            }
+
+            @Override
+            public <T, E extends Throwable> void onError(RetryContext ctx, RetryCallback<T, E> callback, Throwable th) {
+                logger.warn("Retry operation with error {} ", printSqlException(th));
+                retriesCount.incrementAndGet();
+            }
+        };
+    }
+
+    private String printSqlException(Throwable th) {
+        Throwable ex = th;
+        while (ex != null) {
+            if (ex instanceof SQLException) {
+                return ex.getMessage();
+            }
+            ex = ex.getCause();
+        }
+        return th.getMessage();
     }
 
     @Override
