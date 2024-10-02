@@ -4,8 +4,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.sql.SQLException;
-import java.sql.Statement;
 
 import javax.persistence.EntityManager;
 
@@ -19,6 +17,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import tech.ydb.apps.annotation.YdbRetryable;
+import tech.ydb.jdbc.YdbConnection;
+import tech.ydb.jdbc.context.QueryStat;
 
 /**
  *
@@ -45,16 +45,7 @@ public class SchemeService {
             return;
         }
 
-
-        // TODO: Add support of DDL queries to prepareStatement
-        em.unwrap(Session.class).doWork(connection -> {
-            try (Statement st = connection.createStatement()) {
-                st.execute(script);
-                logger.info("tables have been dropped");
-            } catch (SQLException ex) {
-                logger.warn("cannot drop tables with message {}", ex.getMessage());
-            }
-        });
+        em.createNativeQuery(script).executeUpdate();
     }
 
     @Transactional
@@ -66,14 +57,7 @@ public class SchemeService {
             return;
         }
 
-
-        // TODO: Add support of DDL queries to prepareStatement
-        em.unwrap(Session.class).doWork(connection -> {
-            try (Statement st = connection.createStatement()) {
-                st.execute(script);
-                logger.info("tables have been created");
-            }
-        });
+        em.createNativeQuery(script).executeUpdate();
     }
 
     private String readResourceFile(String location) {
@@ -83,5 +67,14 @@ public class SchemeService {
         } catch (IOException e) {
             return null;
         }
+    }
+
+    public void printStats() {
+        em.unwrap(Session.class).doWork(connection -> {
+            YdbConnection ydb = connection.unwrap(YdbConnection.class);
+            for (QueryStat stat: ydb.getCtx().getQueryStats()) {
+                logger.info("\nSQL = {}\nYQL = {}\nPLAN= {}", stat.getOriginSQL(), stat.getPreparedYQL(), stat.getPlan());
+            }
+        });
     }
 }
