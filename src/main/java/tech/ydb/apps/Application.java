@@ -35,7 +35,7 @@ import tech.ydb.apps.service.TokenService;
 public class Application implements CommandLineRunner {
     private static final Logger logger = LoggerFactory.getLogger(Application.class);
 
-    private static final int THREADS_COUNT = 32;
+    private static final int THREADS_COUNT = 64;
     private static final int RECORDS_COUNT = 1_000_000;
     private static final int LOAD_BATCH_SIZE = 1000;
 
@@ -126,7 +126,13 @@ public class Application implements CommandLineRunner {
             if ("run".equalsIgnoreCase(arg)) {
                 ticker.runWithMonitor(this::runWorkloads);
             }
+
+            if ("test".equalsIgnoreCase(arg)) {
+                ticker.runWithMonitor(this::test);
+            }
         }
+
+        schemeService.printStats();
     }
 
     private Thread threadFactory(Runnable runnable) {
@@ -144,12 +150,23 @@ public class Application implements CommandLineRunner {
             futures.add(CompletableFuture.runAsync(() -> {
                 try (Ticker.Measure measure = ticker.getLoad().newCall()) {
                     tokenService.insertBatch(first, last);
+                    logger.info("inserted tokens [{}, {})", first, last);
                     measure.inc();
                 }
             }, executor));
         }
 
         CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).join();
+    }
+
+    private void test() {
+        final Random rnd = new Random();
+        List<Integer> ids = new ArrayList<>();
+        for (int idx = 0; idx < 10; idx++) {
+            ids.add(rnd.nextInt(RECORDS_COUNT));
+        }
+
+        tokenService.updateBatch(ids);
     }
 
     private void runWorkloads() {
