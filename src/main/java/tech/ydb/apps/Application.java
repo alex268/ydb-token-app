@@ -9,6 +9,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import javax.annotation.PreDestroy;
 
@@ -35,11 +37,11 @@ import tech.ydb.apps.service.TokenService;
 public class Application implements CommandLineRunner {
     private static final Logger logger = LoggerFactory.getLogger(Application.class);
 
-    private static final int THREADS_COUNT = 64;
+    private static final int THREADS_COUNT = 32;
     private static final int RECORDS_COUNT = 1_000_000;
     private static final int LOAD_BATCH_SIZE = 1000;
 
-    private static final int WORKLOAD_DURATION_SECS = 60;
+    private static final int WORKLOAD_DURATION_SECS = 60; // 60 seconds
 
     public static void main(String[] args) {
         SpringApplication.run(Application.class, args).close();
@@ -87,7 +89,7 @@ public class Application implements CommandLineRunner {
 
             @Override
             public <T, E extends Throwable> void onError(RetryContext ctx, RetryCallback<T, E> callback, Throwable th) {
-                logger.warn("Retry operation with error {} ", printSqlException(th));
+                logger.debug("Retry operation with error {} ", printSqlException(th));
                 retriesCount.incrementAndGet();
             }
         };
@@ -161,12 +163,11 @@ public class Application implements CommandLineRunner {
 
     private void test() {
         final Random rnd = new Random();
-        List<Integer> ids = new ArrayList<>();
-        for (int idx = 0; idx < 10; idx++) {
-            ids.add(rnd.nextInt(RECORDS_COUNT));
-        }
+        List<Integer> randomIds = IntStream.range(0, 100)
+                .mapToObj(idx -> rnd.nextInt(RECORDS_COUNT))
+                .collect(Collectors.toList());
 
-        tokenService.updateBatch(ids);
+        tokenService.updateBatch(randomIds);
     }
 
     private void runWorkloads() {
@@ -183,18 +184,32 @@ public class Application implements CommandLineRunner {
         final Random rnd = new Random();
         while (System.currentTimeMillis() < finishAt) {
             int mode = rnd.nextInt(10);
-            int id = rnd.nextInt(RECORDS_COUNT);
 
-            if (mode < 5) {
-                try (Ticker.Measure measure = ticker.getFetch().newCall()) {
-                    tokenService.fetchToken(id);
-                    measure.inc();
+            try {
+                if (mode < 2) {
+                    try (Ticker.Measure measure = ticker.getBatchUpdate().newCall()) {
+                        List<Integer> randomIds = IntStream.range(0, 100)
+                                .mapToObj(idx -> rnd.nextInt(RECORDS_COUNT))
+                                .collect(Collectors.toList());
+                        tokenService.updateBatch(randomIds);
+                        measure.inc();
+                    }
+
+                } else if (mode < 6) {
+                    int id = rnd.nextInt(RECORDS_COUNT);
+                    try (Ticker.Measure measure = ticker.getFetch().newCall()) {
+                        tokenService.fetchToken(id);
+                        measure.inc();
+                    }
+                } else {
+                        int id = rnd.nextInt(RECORDS_COUNT);
+                    try (Ticker.Measure measure = ticker.getUpdate().newCall()) {
+                        tokenService.updateToken(id);
+                        measure.inc();
+                    }
                 }
-            } else {
-                try (Ticker.Measure measure = ticker.getUpdate().newCall()) {
-                    tokenService.updateToken(id);
-                    measure.inc();
-                }
+            } catch (RuntimeException ex) {
+                logger.debug("got exception {}", ex.getMessage());
             }
         }
     }

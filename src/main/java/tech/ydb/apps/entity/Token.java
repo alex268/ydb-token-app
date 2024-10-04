@@ -7,9 +7,11 @@ import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.Id;
 import javax.persistence.Table;
+import javax.persistence.Transient;
 
 import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.annotations.Type;
+import org.springframework.data.domain.Persistable;
 
 /**
  *
@@ -18,7 +20,7 @@ import org.hibernate.annotations.Type;
 @Entity
 @DynamicUpdate
 @Table(name = "app_token")
-public class Token implements Serializable {
+public class Token implements Serializable, Persistable<UUID> {
     @Id
     @Type(type="uuid-char")
     private UUID id;
@@ -29,6 +31,10 @@ public class Token implements Serializable {
     @Column
     private Integer version;
 
+    @Transient
+    private final boolean isNew;
+
+    @Override
     public UUID getId() {
         return this.id;
     }
@@ -41,12 +47,20 @@ public class Token implements Serializable {
         return this.version;
     }
 
-    public Token() { }
+    @Override
+    public boolean isNew() {
+        return isNew;
+    }
+
+    public Token() {
+        this.isNew = false;
+    }
 
     public Token(String username) {
         this.id = getKey(username);
         this.username = username;
         this.version = 1;
+        this.isNew = true;
     }
 
     public void incVersion() {

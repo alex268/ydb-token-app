@@ -91,6 +91,7 @@ public class Ticker {
     private final Method load = new Method("LOAD  ");
     private final Method fetch = new Method("FETCH ");
     private final Method update = new Method("UPDATE");
+    private final Method batchUpdate = new Method("BULK_UP");
 
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(
             r -> new Thread(r, "ticker")
@@ -112,8 +113,12 @@ public class Ticker {
         return this.update;
     }
 
+    public Method getBatchUpdate() {
+        return this.batchUpdate;
+    }
+
     public void runWithMonitor(Runnable runnable) {
-        Arrays.asList(load, fetch, update).forEach(Method::reset);
+        Arrays.asList(load, fetch, update, batchUpdate).forEach(Method::reset);
         final ScheduledFuture<?> future = scheduler.scheduleAtFixedRate(this::print, 1, 10, TimeUnit.SECONDS);
         runnable.run();
         future.cancel(false);
@@ -126,11 +131,11 @@ public class Ticker {
     }
 
     private void print() {
-        Arrays.asList(load, fetch, update).forEach(m -> m.print(logger));
+        Arrays.asList(load, fetch, update, batchUpdate).forEach(m -> m.print(logger));
     }
 
     public void printTotal() {
         logger.info("=========== TOTAL ==============");
-        Arrays.asList(load, fetch, update).forEach(m -> m.printTotal(logger));
+        Arrays.asList(load, fetch, update, batchUpdate).forEach(m -> m.printTotal(logger));
     }
 }
