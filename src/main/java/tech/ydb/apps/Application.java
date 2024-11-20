@@ -27,6 +27,7 @@ import org.springframework.retry.annotation.EnableRetry;
 
 import tech.ydb.apps.service.SchemeService;
 import tech.ydb.apps.service.TokenService;
+import tech.ydb.jdbc.YdbTracer;
 
 /**
  *
@@ -133,8 +134,6 @@ public class Application implements CommandLineRunner {
                 ticker.runWithMonitor(this::test);
             }
         }
-
-        schemeService.printStats();
     }
 
     private Thread threadFactory(Runnable runnable) {
@@ -162,6 +161,8 @@ public class Application implements CommandLineRunner {
     }
 
     private void test() {
+        YdbTracer.current().markToPrint("test");
+
         final Random rnd = new Random();
         List<Integer> randomIds = IntStream.range(0, 100)
                 .mapToObj(idx -> rnd.nextInt(RECORDS_COUNT))

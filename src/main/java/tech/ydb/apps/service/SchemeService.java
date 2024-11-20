@@ -8,7 +8,6 @@ import java.nio.charset.StandardCharsets;
 import javax.persistence.EntityManager;
 
 import com.google.common.io.CharStreams;
-import org.hibernate.Session;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.Resource;
@@ -17,8 +16,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import tech.ydb.apps.annotation.YdbRetryable;
-import tech.ydb.jdbc.YdbConnection;
-import tech.ydb.jdbc.context.QueryStat;
 
 /**
  *
@@ -67,14 +64,5 @@ public class SchemeService {
         } catch (IOException e) {
             return null;
         }
-    }
-
-    public void printStats() {
-        em.unwrap(Session.class).doWork(connection -> {
-            YdbConnection ydb = connection.unwrap(YdbConnection.class);
-            for (QueryStat stat: ydb.getCtx().getQueryStats()) {
-                logger.info("\nSQL = {}\nYQL = {}\nPLAN= {}", stat.getOriginSQL(), stat.getPreparedYQL(), stat.getPlan());
-            }
-        });
     }
 }

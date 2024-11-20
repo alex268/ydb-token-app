@@ -79,4 +79,23 @@ public class TokenService {
 
         repository.saveAllAndFlush(batch);
     }
+
+    @YdbRetryable
+    @Transactional
+    public void removeBatch(List<Integer> ids) {
+        List<UUID> uuids = ids.stream().map(this::getKey).collect(Collectors.toList());
+        repository.deleteAllByIdInBatch(uuids);
+    }
+
+    @YdbRetryable
+    @Transactional
+    public void listManyRecords() {
+        long count = 0;
+        for (String id : repository.scanFindAll()) {
+            count ++;
+            if (count % 1000 == 0) {
+                logger.info("scan readed {} records", count);
+            }
+        }
+    }
 }
